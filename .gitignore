@@ -1,0 +1,4 @@
+# Env file
+/scripts/.env
+.env
+.env.local
