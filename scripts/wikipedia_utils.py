@@ -1,7 +1,8 @@
-import requests
-import os
 from bs4 import BeautifulSoup
 from datetime import datetime
+import requests
+import os
+import re
 
 def obtener_paginas_categoria(categoria, idioma='en', limite=5):
     url = f"https://{idioma}.wikipedia.org/w/api.php"
@@ -53,7 +54,7 @@ def obtener_fecha_modificacion(articulo, idioma='en'):
         print(f"Error al obtener la fecha de modificación: {str(e)}")
         return None
     
-    
+
 def obtener_contenido_wikipedia(articulo, idioma='en'):
     url = f"https://{idioma}.wikipedia.org/w/api.php"
     parametros = {
@@ -70,6 +71,10 @@ def obtener_contenido_wikipedia(articulo, idioma='en'):
         contenido_bruto = datos['parse']['text']['*']
         # Utiliza BeautifulSoup para analizar el contenido HTML
         soup = BeautifulSoup(contenido_bruto, 'html.parser')
+        # Encuentra y elimina las notas de cita (contenido entre corchetes)
+        for nota_cita in soup.find_all("sup", class_="reference"):
+            nota_cita.extract()  # Elimina el elemento del contenido
+
         # Extrae párrafos y títulos
         contenido_limpio = []
         contenido_actual = {'titulo': '', 'contenido': ''}  # Almacena el contenido actual
@@ -84,6 +89,8 @@ def obtener_contenido_wikipedia(articulo, idioma='en'):
             else:
                 # Añade el párrafo al contenido actual si contiene texto
                 texto_parrafo = elemento.get_text().strip()
+                # Reemplaza [update] por una cadena vacía en el texto del párrafo
+                texto_parrafo = re.sub(r'\[update\]', '', texto_parrafo)
                 if texto_parrafo:
                     contenido_actual['contenido'] += ' ' + texto_parrafo
         # Añade el último contenido actual

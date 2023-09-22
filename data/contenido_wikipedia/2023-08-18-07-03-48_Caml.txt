@@ -89,5 +89,5 @@ Discrete wavelet transform (pattern matching)
 
 History
 
- The first Caml implementation was written in Lisp by Ascánder Suárez in 1987 at the French Institute for Research in Computer Science and Automation (INRIA).[2] Its successor, Caml Light, was implemented in C by Xavier Leroy and Damien Doligez,[2] and the original was nicknamed "Heavy Caml" because of its higher memory and CPU requirements.[2] Caml Special Light was a further complete rewrite that added a powerful module system to the core language. It was augmented with an object layer to become Objective Caml, eventually renamed OCaml.
+ The first Caml implementation was written in Lisp by Ascánder Suárez in 1987 at the French Institute for Research in Computer Science and Automation (INRIA). Its successor, Caml Light, was implemented in C by Xavier Leroy and Damien Doligez, and the original was nicknamed "Heavy Caml" because of its higher memory and CPU requirements. Caml Special Light was a further complete rewrite that added a powerful module system to the core language. It was augmented with an object layer to become Objective Caml, eventually renamed OCaml.
 
