@@ -22,7 +22,7 @@ def main():
         print("No se pudieron obtener las páginas de la categoría.")
         
     
-    almacenar_embeddings(index, directorio)
+    # almacenar_embeddings(index, directorio)
 
 if __name__ == "__main__":
     main()
