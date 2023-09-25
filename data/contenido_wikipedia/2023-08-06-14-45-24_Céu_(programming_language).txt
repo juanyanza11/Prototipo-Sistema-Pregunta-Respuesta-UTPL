@@ -1,9 +1,0 @@
-
-
- Céu is "Structured Synchronous Reactive Programming" 
-According to its web page, Céu supports synchronous concurrency with shared memory and deterministic execution and has a small memory footprint.
-
-Sources
-
- This programming-language-related article is a stub. You can help Wikipedia by expanding it.
-

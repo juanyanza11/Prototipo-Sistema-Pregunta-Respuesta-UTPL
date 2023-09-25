@@ -9,3 +9,4 @@ huggingface_hub
 beautifulsoup4
 python-dotenv
 cohere
+pandas

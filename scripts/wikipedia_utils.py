@@ -1,8 +1,10 @@
+import csv
 from bs4 import BeautifulSoup
 from datetime import datetime
 import requests
 import os
 import re
+import pandas as pd
 
 def obtener_paginas_categoria(categoria, idioma='en', limite=5):
     url = f"https://{idioma}.wikipedia.org/w/api.php"
@@ -113,29 +115,56 @@ def guardar_contenido_txt(articulo, contenido, directorio, fecha_modificacion):
             f.write(seccion['contenido'] + '\n\n')
     print(f"Contenido guardado en {archivo}")
     
+def guardar_contenido_csv(articulo, contenido, fecha_modificacion):
+    archivo_csv = 'data/contenido_wikipedia.csv'
+
+    # Verificar si el archivo CSV ya existe
+    if not os.path.isfile(archivo_csv):
+        # Si no existe, crear el archivo y escribir la cabecera
+        with open(archivo_csv, 'w', newline='', encoding='utf-8') as f:
+            writer = csv.writer(f, delimiter='|')
+            writer.writerow(['Pagina', 'Topic', 'Contenido', 'Fecha_Modificacion'])
+
+    # Guardar el contenido en el archivo CSV
+    with open(archivo_csv, 'a', newline='', encoding='utf-8') as f:
+        writer = csv.writer(f, delimiter='|')
+        for seccion in contenido:
+            writer.writerow([articulo, seccion['titulo'], seccion['contenido'], fecha_modificacion])
+    print(f"Contenido de '{articulo}' guardado en {archivo_csv}")
+    
 def verificar_y_actualizar_contenido(articulo, contenido_actual, directorio):
     fecha_modificacion_actual = obtener_fecha_modificacion(articulo)
+    fecha_modificacion_actual_time = datetime.strptime(fecha_modificacion_actual, '%Y-%m-%d-%H-%M-%S')
     
     if fecha_modificacion_actual:
-        # Genera el nombre de archivo basado en el artículo y la fecha de modificación
-        nombre_archivo = f"{fecha_modificacion_actual}_{articulo.replace(' ', '_')}.txt"
-        archivo_guardado = os.path.join(directorio, nombre_archivo)
-        
-        if os.path.exists(archivo_guardado):
-            # Obtener la fecha del archivo guardado desde el nombre del archivo
-            fecha_archivo_guardado = nombre_archivo.split('_')[0]
-            
-            print(f"Fecha de modificación actual: {fecha_modificacion_actual}")
-            print(f"Fecha de modificación guardada: {fecha_archivo_guardado}")
-            
-            # Comparar las fechas
-            if fecha_modificacion_actual != fecha_archivo_guardado:
-                print(f"El contenido de '{articulo}' ha cambiado.")
-                guardar_contenido_txt(articulo, contenido_actual, directorio, fecha_modificacion_actual)
+        # Verifica si el archivo CSV existe
+        archivo_csv = directorio
+        if os.path.isfile(archivo_csv):
+            # Lee el archivo CSV en un DataFrame de Pandas
+            df = pd.read_csv(archivo_csv,  delimiter='|', encoding='utf-8')
+            # Filtra las filas correspondientes al artículo actual
+            filas_articulo = df[df['Pagina'] == articulo]
+            if not filas_articulo.empty:
+                # Obtiene la fecha de modificación guardada en el CSV
+                fecha_guardada_str = filas_articulo['Fecha_Modificacion'].iloc[0]
+                fecha_guardada_datetime = datetime.strptime(fecha_guardada_str, '%Y-%m-%d-%H-%M-%S')
+                
+                print(f"Fecha de modificación actual: {fecha_modificacion_actual}")
+                print(f"Fecha de modificación guardada: {fecha_guardada_str}")
+                
+                # Compara las fechas
+                if fecha_modificacion_actual_time > fecha_guardada_datetime:
+                    print(f"El contenido de '{articulo}' ha cambiado.")
+                    guardar_contenido_csv(articulo, contenido_actual, fecha_modificacion_actual)
+                else:
+                    print(f"El contenido de '{articulo}' sigue siendo el mismo.")
             else:
-                print(f"El contenido de '{articulo}' sigue siendo el mismo.")
+                # Si no hay datos en el DataFrame para el artículo, guarda el contenido por primera vez
+                guardar_contenido_csv(articulo, contenido_actual, fecha_modificacion_actual)
+                print(f"Contenido de '{articulo}' guardado por primera vez.")
         else:
-            guardar_contenido_txt(articulo, contenido_actual, directorio, fecha_modificacion_actual)
+            # Si el archivo CSV no existe, guarda el contenido por primera vez
+            guardar_contenido_csv(articulo, contenido_actual, fecha_modificacion_actual)
             print(f"Contenido de '{articulo}' guardado por primera vez.")
     else:
         print(f"No se pudo obtener la fecha de modificación actual de '{articulo}'.")

@@ -1,8 +1,0 @@
-
-
- Cameleon is a free and open source graphical language for functional programming, released under an MIT License. Cameleon language is a graphical data flow language following a two-scale paradigm. It allows an easy up-scale, that is, the integration of any library writing in C++ into the data flow language. Cameleon language aims to democratize macro-programming by an intuitive interaction between the human and the computer where building an application based on a data-process and a GUI is a simple task to learn and to do. Cameleon language allows conditional execution and repetition to solve complex macro-problems. Cameleon is built on an extension of the petri net model for the description of how the Cameleon language executes a composition.
-
-External links
-
- This programming-language-related article is a stub. You can help Wikipedia by expanding it.
-
