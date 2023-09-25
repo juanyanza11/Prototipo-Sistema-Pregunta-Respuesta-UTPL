@@ -6,6 +6,7 @@ from langchain.text_splitter import RecursiveCharacterTextSplitter
 import pinecone
 from langchain.embeddings import HuggingFaceEmbeddings
 from langchain.vectorstores import Pinecone
+from langchain.embeddings import CohereEmbeddings
 from dotenv import load_dotenv
 
 
@@ -24,9 +25,11 @@ def almacenar_embeddings(index, directorio):
     os.environ["HUGGINGFACEHUB_API_TOKEN"] = "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"
     PINECONE_API_KEY = os.getenv("PINECONE_API_KEY")
     PINECONE_ENVIRONMENT = os.getenv("PINECONE_ENVIRONMENT")
+    COHERE_API_KEY = os.getenv("COHERE_API_KEY")
     # HUGGINGFACEHUB_API_TOKEN = os.getenv("HUGGINGFACEHUB_API_TOKEN")
 
-    embeddings = HuggingFaceEmbeddings(model_name='sentence-transformers/all-MiniLM-L6-v2')
+    # embeddings = HuggingFaceEmbeddings(model_name='sentence-transformers/all-MiniLM-L6-v2') # 384 Dimensiones
+    cohere = CohereEmbeddings(model="embed-english-v2.0", cohere_api_key = COHERE_API_KEY) # 4096 Dimensiones
     print(PINECONE_API_KEY)
     print(PINECONE_ENVIRONMENT)
     
@@ -37,4 +40,4 @@ def almacenar_embeddings(index, directorio):
     )
 
     # Subir embeddings a pinecone con el nombre de la variable index, el objeto doocsearch esta listo para buscar vectores similares
-    docsearch = Pinecone.from_texts([t.page_content for t in docs], embeddings, index_name=index)
+    docsearch = Pinecone.from_texts([t.page_content for t in docs], cohere, index_name=index)
