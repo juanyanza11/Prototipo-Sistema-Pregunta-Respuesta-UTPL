@@ -1,41 +1,66 @@
-# proyecto_embeddings/embedding_pinecone/embeddings.py
 import os
-from langchain.document_loaders import TextLoader
-from langchain.document_loaders import DirectoryLoader
+import pandas as pd
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 import pinecone
-from langchain.embeddings import HuggingFaceEmbeddings
-from langchain.vectorstores import Pinecone
-from langchain.embeddings import CohereEmbeddings
 from dotenv import load_dotenv
-from langchain.document_loaders.csv_loader import CSVLoader
+from langchain.embeddings import CohereEmbeddings
+import matplotlib.pyplot as plt
+import numpy as np
+from langchain.vectorstores import Pinecone
+
 
 def almacenar_embeddings(index, directorio):
     load_dotenv()
 
     PINECONE_API_KEY = os.getenv("PINECONE_API_KEY")
     PINECONE_ENVIRONMENT = os.getenv("PINECONE_ENVIRONMENT")
-    COHERE_API_KEY = os.getenv("COHERE_API_KEY")
-    # HUGGINGFACEHUB_API_TOKEN = os.getenv("HUGGINGFACEHUB_API_TOKEN")
-    
-    loader = CSVLoader(file_path=os.path.abspath(directorio), csv_args={'delimiter': '|'}, encoding='utf-8')
-    print(os.path.abspath(directorio))
+    # COHERE_API_KEY = os.getenv("COHERE_API_KEY")
 
-    # Carga todos los rows del csv como documentos
-    documentos = loader.load()
+    # Use pandas to load the CSV file
+    df = pd.read_csv(os.path.abspath(directorio), delimiter='|', encoding='utf-8',
+                     names=["Pagina", 'Topic', "Contenido", "Fecha_Modificacion"])
 
-    text_splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=0)
-    docs = text_splitter.split_documents(documentos)
-    print(f"Se obtuvieron {len(docs)} documentos.")
+    # Extract the 'Contenido' column as a list of documents (strings)
+    documentos = df['Contenido'].tolist()
 
-    # 4096 Dimensiones
-    cohere = CohereEmbeddings(model="embed-english-v2.0", cohere_api_key = COHERE_API_KEY) 
-    
-    # Inicializar PineCone
+    text_splitter = RecursiveCharacterTextSplitter(
+        chunk_size=1200, chunk_overlap=0)
+
+    # Split the documents into chunks
+    chunks = [text_splitter.split_text(doc) for doc in documentos[1:]]
+
+    # Flatten the list of chunks
+    chunks_flat = [chunk for sublist in chunks for chunk in sublist]
+
+    # cohere = CohereEmbeddings(model="embed-english-v2.0", cohere_api_key = COHERE_API_KEY) <--- Descomentar instanciar el modelo de Cohere
+
+    total_chunks = 0
+
+    data_hist = []
+    count = 0
+
+    for c in chunks_flat:
+        count += 1 if len(c) >= 1199 else 0
+        data_hist.append(len(c))
+        print(f'Chunk de {len(c)} caracteres')
+        total_chunks += len(c)
+        print(c)
+        print('-' * 150)
+
+    print(f"Total de caracteres: {total_chunks}")
+    print(f"Media de chunks: {total_chunks/len(chunks_flat)}")
+    print(f"Se obtuvieron {len(chunks_flat)} chunks.")
+    print(f"Se obtuvieron {count} chunks superiores o iguales a 1199.")
+
+    plt.hist(data_hist, bins='auto')
+    plt.show()
+
+    # Initialize PineCone
     pinecone.init(
         api_key=PINECONE_API_KEY,
         environment=PINECONE_ENVIRONMENT
     )
 
-    # Subir embeddings a pinecone con el nombre de la variable index, el objeto doocsearch esta listo para buscar vectores similares
-    Pinecone.from_texts([t.page_content for t in docs], cohere, index_name=index)
+    # Upload embeddings to PineCone with the name of the variable index
+    # You can process 'chunks_flat' here or access their content directly as needed
+    # Pinecone.from_texts(chunks_flat, cohere, index_name=index) # <--- Descomentar esta línea para guardar los embeddings en PineCone

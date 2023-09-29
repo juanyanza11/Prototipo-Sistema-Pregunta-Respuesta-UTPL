@@ -1,27 +1,58 @@
+import argparse
 from scripts.embeddings_store import almacenar_embeddings
 from scripts.wikipedia_utils import obtener_contenido_wikipedia, obtener_paginas_categoria, verificar_y_actualizar_contenido
 
+
+class WikipediaCrawler:
+    def __init__(self, categoria_wikipedia, idioma_wikipedia, limite_paginas, directorio, index, almacenar_embeddings):
+        self.categoria_wikipedia = categoria_wikipedia
+        self.idioma_wikipedia = idioma_wikipedia
+        self.limite_paginas = limite_paginas
+        self.directorio = directorio
+        self.index = index
+        self.almacenar_embeddings = almacenar_embeddings
+
+    def crawl_wikipedia(self):
+        print("Obteniendo páginas de la categoría...")
+        paginas = obtener_paginas_categoria(
+            self.categoria_wikipedia, self.idioma_wikipedia, self.limite_paginas)
+
+        if paginas:
+            for pagina in paginas:
+                contenido_actual = obtener_contenido_wikipedia(
+                    pagina, self.idioma_wikipedia)
+                if contenido_actual:
+                    verificar_y_actualizar_contenido(
+                        pagina, contenido_actual, self.directorio)
+                else:
+                    print(f"No se pudo obtener el contenido de '{pagina}'.")
+        else:
+            print("No se pudieron obtener las páginas de la categoría.")
+
+        if self.almacenar_embeddings:
+            print("Almacenando embeddings...")
+            almacenar_embeddings(self.index, self.directorio)
+
+
 def main():
-    categoria_wikipedia = "Programming_languages"  # Categoria seleccionada
-    idioma_wikipedia = "en"  # Cambiar el idioma si es necesario
-    limite_paginas = 25   # Cambiar el límite de páginas
-    directorio = "data/contenido_wikipedia.csv"
-    index = "wikipedia"
+    parser = argparse.ArgumentParser(description='Wikipedia Crawler')
+    parser.add_argument('--categoria', default='Pollution',
+                        help='Categoría de Wikipedia')
+    parser.add_argument('--idioma', default='en', help='Idioma de Wikipedia')
+    parser.add_argument('--limite', type=int, default=100,
+                        help='Límite de páginas')
+    parser.add_argument('--directorio', default=f'data/pollution_wikipedia_4.csv',
+                        help='Directorio de almacenamiento')
+    parser.add_argument('--index', default='pollution', help='Índice')
+    parser.add_argument('--guardar', default=False,
+                        action='store_true', help='Almacenar embeddings')
 
+    args = parser.parse_args()
 
-    # paginas = obtener_paginas_categoria(categoria_wikipedia, idioma_wikipedia, limite_paginas)
+    crawler = WikipediaCrawler(args.categoria, args.idioma, args.limite,
+                               args.directorio, args.index, args.guardar)
+    crawler.crawl_wikipedia()
 
-    # if paginas:
-    #     for pagina in paginas:
-    #         contenido_actual = obtener_contenido_wikipedia(pagina, idioma_wikipedia)
-    #         if contenido_actual:
-    #             verificar_y_actualizar_contenido(pagina, contenido_actual, directorio)
-    #         else:
-    #             print(f"No se pudo obtener el contenido de '{pagina}'.")
-    # else:
-    #     print("No se pudieron obtener las páginas de la categoría.")
-    
-    almacenar_embeddings(index, directorio)
 
 if __name__ == "__main__":
     main()
