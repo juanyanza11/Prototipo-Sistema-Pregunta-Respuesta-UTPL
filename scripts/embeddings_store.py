@@ -3,57 +3,152 @@ import pandas as pd
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 import pinecone
 from dotenv import load_dotenv
-from langchain.embeddings import CohereEmbeddings
+from langchain.embeddings import HuggingFaceEmbeddings
 import matplotlib.pyplot as plt
 import numpy as np
 from langchain.vectorstores import Pinecone
+from langchain.embeddings.openai import OpenAIEmbeddings
 
+# Text splitters tested
+from transformers import GPT2TokenizerFast
+from langchain.text_splitter import CharacterTextSplitter
+from langchain.text_splitter import NLTKTextSplitter
+from langchain.text_splitter import SentenceTransformersTokenTextSplitter
+from langchain.text_splitter import SpacyTextSplitter
+from langchain.text_splitter import TokenTextSplitter
+from langchain.text_splitter import CharacterTextSplitter
 
-def almacenar_embeddings(index, directorio):
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.cluster import DBSCAN    
+from sklearn.feature_extraction.text import ENGLISH_STOP_WORDS
+from sklearn.metrics import silhouette_score
+import string
+
+def almacenar_embeddings_dbscan(index, directorio):
     load_dotenv()
 
     PINECONE_API_KEY = os.getenv("PINECONE_API_KEY")
     PINECONE_ENVIRONMENT = os.getenv("PINECONE_ENVIRONMENT")
-    # COHERE_API_KEY = os.getenv("COHERE_API_KEY")
 
-    # Use pandas to load the CSV file
-    df = pd.read_csv(os.path.abspath(directorio), delimiter='|', encoding='utf-8',
-                     names=["Pagina", 'Topic', "Contenido", "Fecha_Modificacion"])
+    # Cargar contenido actualizado
+    df = pd.read_csv(os.path.abspath(directorio), delimiter=',', encoding='utf-8',
+                     names=["Seccion", 'Subseccion', "Contenido", "WikipageID", "LastModified"])
 
-    # Extract the 'Contenido' column as a list of documents (strings)
+    # Documentos a lista
+    df = df.drop(0, axis=0)
     documentos = df['Contenido'].tolist()
-
+    # print(df.head())
+    
+    embeddings = HuggingFaceEmbeddings(model_name='BAAI/bge-base-en-v1.5')
+        
+    # All text splitters tested
+    
     text_splitter = RecursiveCharacterTextSplitter(
-        chunk_size=1200, chunk_overlap=0)
+        chunk_overlap=0, separators=[" "])
+    
+    # tokenizer = GPT2TokenizerFast.from_pretrained("gpt2")
+    # text_splitter = CharacterTextSplitter.from_huggingface_tokenizer(
+    # tokenizer, chunk_overlap=0)
+    
+    # text_splitter = NLTKTextSplitter()
+    
+    # text_splitter = SentenceTransformersTokenTextSplitter(chunk_overlap=0)
+    
+    # text_splitter = SpacyTextSplitter(separator=" ", chunk_overlap=0, chunk_size=256)
+    
+    # text_splitter = TokenTextSplitter(chunk_overlap=0)
+    
+    # text_splitter = CharacterTextSplitter.from_tiktoken_encoder(
+    #     chunk_overlap=0, chunk_size=1000)
 
-    # Split the documents into chunks
-    chunks = [text_splitter.split_text(doc) for doc in documentos[1:]]
+    # Separar los documentos en chunks
+    chunks = [text_splitter.split_text(doc) for doc in documentos]
 
-    # Flatten the list of chunks
+    # Chunks en una sola lista
     chunks_flat = [chunk for sublist in chunks for chunk in sublist]
 
-    # cohere = CohereEmbeddings(model="embed-english-v2.0", cohere_api_key = COHERE_API_KEY) <--- Descomentar instanciar el modelo de Cohere
+    # Convertir los documentos a lista de textos
+    documents_text = [preprocess_text(chunk) for chunk in chunks_flat]
 
-    total_chunks = 0
+    # Vectorizar los documentos con TF-IDF
+    vectorizer = TfidfVectorizer(min_df=0.1, max_df=0.9)
+    X = vectorizer.fit_transform(documents_text)
+    print(f"Matriz de {X.shape[0]} documentos y {X.shape[1]} características.")
+    
+    # DBSCAN clustering
+    dbscan = DBSCAN(eps=0.3, min_samples=5)
+    clusters = dbscan.fit_predict(X)
+    
 
+    pollution_documents = []
+
+    for i, doc_chunk in enumerate(chunks_flat):
+        print(f"Chunk {i} pertennece al cluster {clusters[i]}")
+        if clusters[i] == 1:  # Assuming cluster 1 corresponds to "related to Pollution"
+            pollution_documents.append(doc_chunk)
+
+    total_chunks_char = 0
+    total_chunks_word = 0
     data_hist = []
     count = 0
+    count_word_range = 0
+    count_word = 0
 
-    for c in chunks_flat:
-        count += 1 if len(c) >= 1199 else 0
-        data_hist.append(len(c))
-        print(f'Chunk de {len(c)} caracteres')
-        total_chunks += len(c)
-        print(c)
-        print('-' * 150)
+    for a in pollution_documents:
+        # print(f'Chunk de {len(a)} caracteres')
+        print(f"Chunk de {len(a.split(' '))} palabras")
+        print('*' * 70, 'Contenido', '*' * 70)
+        print(a)
+        print('*' * 150)
+        count_word += 1 if len(a.split(' ')) >= 0 else 0
+        count += 1 if len(a) >= 1199 else 0
+        count_word_range += 1 if 100 <= len(a.split(' ')) <= 256 else 0
+        total_chunks_char += len(a)
+        total_chunks_word += len(a.split(' '))
+        data_hist.append(len(a.split(' ')))
 
-    print(f"Total de caracteres: {total_chunks}")
-    print(f"Media de chunks: {total_chunks/len(chunks_flat)}")
-    print(f"Se obtuvieron {len(chunks_flat)} chunks.")
-    print(f"Se obtuvieron {count} chunks superiores o iguales a 1199.")
+    # print(f"Total de caracteres: {total_chunks_char}")
+    print("Media de tokens por palabras: {:,.2f}".format(total_chunks_word/len(pollution_documents)))
+    # print("Media de tokens por caracteres: {:,.2f}".format(total_chunks_char/len(pollution_documents)))
+    # print(f"Se obtuvieron {len(pollution_documents)} chunks relacionados con la contaminación.")
+    # print(f"Se obtuvieron {count} chunks superiores o iguales a 1199.")
+    print(f"Se obtuvieron {count_word} documentos de tokens por palabras.")
+    print(f"Se obtuvieron {count_word_range} tokens entre 100 y 256.")
+    print("-" * 150)
+    
+    print('----------- DBSCAN -----------')
+    print(f"Documentos Originales: {len(chunks_flat)}")
+    print(f"Documentos relacionados a Pollution: {len(pollution_documents)}")
+    
+    print('----------- DBSCAN Evaluación -----------')
+    eps_values = [0.1, 0.2, 0.3, 0.4, 0.5]
+    silhouette_scores = []
+
+    for eps in eps_values:
+        dbscan = DBSCAN(eps=eps, min_samples=5)
+        clusters = dbscan.fit_predict(X)
+        silhouette_scores.append(silhouette_score(X, clusters))
+    
+    for eps, score in zip(eps_values, silhouette_scores):
+        print(f"eps={eps}, silhouette_score={score}")
+
 
     plt.hist(data_hist, bins='auto')
     plt.show()
+    
+    # Trama la gráfica
+    plt.figure(figsize=(8, 6))
+    plt.plot(eps_values, silhouette_scores, marker='o', linestyle='-')
+    plt.xlabel('Valor de eps')
+    plt.ylabel('Puntuación de silueta')
+    plt.title('Análisis de Codo para Determinar eps en DBSCAN')
+    plt.grid(True)
+    plt.show()
+    
+    # Almacenar nuevos documentos relacionados con Pollution en un CSV
+    df['Cluster'] = clusters
+    pollution_df = df[df['Cluster'] == 1][['Contenido', 'Cluster']]
+    pollution_df.to_csv("pollution_documents.csv", index=False)
 
     # Initialize PineCone
     pinecone.init(
@@ -61,6 +156,14 @@ def almacenar_embeddings(index, directorio):
         environment=PINECONE_ENVIRONMENT
     )
 
-    # Upload embeddings to PineCone with the name of the variable index
-    # You can process 'chunks_flat' here or access their content directly as needed
-    # Pinecone.from_texts(chunks_flat, cohere, index_name=index) # <--- Descomentar esta línea para guardar los embeddings en PineCone
+    # Upload embeddings to PineCone with the name of the specified index
+    print("Subiendo embeddings a Pinecone...")
+    # 1200 - Alto procesamiento CPU ✅
+    # Pinecone.from_texts(pollution_documents, embeddings, index_name=index, embeddings_chunk_size=1200) 
+
+def preprocess_text(text):
+    # Eliminar signos de puntuación y convertir a minúsculas
+    text = text.lower().translate(str.maketrans('', '', string.punctuation))
+    # Eliminar palabras vacías
+    text = ' '.join([word for word in text.split() if word not in ENGLISH_STOP_WORDS])
+    return text

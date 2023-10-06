@@ -30,12 +30,15 @@ def obtener_paginas_categoria(categoria, idioma='en', limite=5):
         return None
 
 
-def obtener_fecha_modificacion(articulo, idioma='en'):
+import requests
+from datetime import datetime
+
+def obtener_fecha_modificacion(pageId, idioma='en'):
     url = f"https://{idioma}.wikipedia.org/w/api.php"
     parametros = {
         'action': 'query',
         'prop': 'revisions',
-        'titles': articulo,
+        'titles': pageId,
         'rvlimit': 1,
         'rvprop': 'timestamp',
         'format': 'json'
@@ -128,20 +131,152 @@ def obtener_contenido_wikipedia(articulo, idioma='en'):
     except requests.exceptions.RequestException as e:
         print(f"Error al obtener el contenido de Wikipedia: {str(e)}")
         return None
+    
 
+def verificar_actualizaciones(csv_file):
+    # Leer el archivo CSV en un DataFrame de Pandas
+    df = pd.read_csv(csv_file)
+    cambios = []  # Lista para almacenar información sobre los cambios
 
-def guardar_contenido_txt(articulo, contenido, directorio, fecha_modificacion):
-    if not os.path.exists(directorio):
-        os.makedirs(directorio)
+    for index, row in df.iterrows():
+        pageid = row['WikipageID']
+        last_modified = row['LastModified']
 
-    articulo = articulo.replace(' ', '_')
-    archivo = os.path.join(directorio, f"{fecha_modificacion}_{articulo}.txt")
-    with open(archivo, 'w', encoding='utf-8') as f:
-        for seccion in contenido:
-            f.write(seccion['titulo'] + '\n\n')
-            f.write(seccion['contenido'] + '\n\n')
-    print(f"Contenido guardado en {archivo}")
+        # Obtener la fecha de modificación actual de la página de Wikipedia
+        fecha_modificacion_actual = obtener_fecha_modificacion(pageid)
 
+        if fecha_modificacion_actual:
+            # Compara las fechas
+            if last_modified < fecha_modificacion_actual:
+                print(f"Fecha de modificación actual: {fecha_modificacion_actual} - Fecha de modificación guardada: {last_modified}")
+                print(f"La página con WikipageID {pageid} necesita actualización.")
+                contenido_actual = obtener_contenido_wikipedia_por_pageid(pageid)
+                if contenido_actual:
+                    print("Cambios en el contenido:")
+                    for seccion in contenido_actual:
+                        print(f"Sección: {seccion['titulo']}")
+                        print(f"Contenido: {seccion['contenido']}\n")
+                    # Guardar el contenido actualizado en el mismo archivo CSV
+                    contenido_actualizado = "\n".join(
+                        [f"{seccion['titulo']}\n{seccion['contenido']}\n" for seccion in contenido_actual])
+                    guardar_contenido_actualizado(
+                        csv_file, pageid, contenido_actualizado)
+                    
+                     # Registrar los cambios en la lista
+                    cambios.append((pageid, len(contenido_actual)))
+                else:
+                    print(f"No se pudo obtener el nuevo contenido para WikipageID {pageid}.")
+            else:
+                print(f"La página con WikipageID {pageid} está actualizada.")
+        else:
+            print(f"No se pudo obtener la fecha de modificación para WikipageID {pageid}.")
+        # Generar el informe de cambios
+    generar_informe_cambios(cambios)
+    
+def generar_informe_cambios(cambios):
+    if not cambios:
+        print("No se encontraron cambios.")
+        return
+
+    informe = "Informe de Cambios en el Contenido:\n\n"
+    informe += f"Total de cambios detectados: {len(cambios)}\n\n"
+
+    for pageid, cambios_contenido in cambios:
+        informe += f"Página con WikipageID {pageid}: {cambios_contenido} palabras cambiadas\n"
+
+    informe_file = "report/informe_cambios.txt"
+    with open(informe_file, 'w') as f:
+        f.write(informe)
+
+    print(f"Informe generado y guardado en {informe_file}.")
+
+            
+def guardar_contenido_actualizado(csv_file, pageid, contenido_actualizado):
+    # Leer el archivo CSV en un DataFrame de Pandas
+    df = pd.read_csv(csv_file)
+
+    index = df[df['WikipageID'] == pageid].index
+
+    if not index.empty:
+        index = index[0]
+        # Actualizar la fila con el contenido actualizado
+        df.at[index, 'Contenido'] = contenido_actualizado
+        df.at[index, 'LastModified'] = obtener_fecha_modificacion(pageid)
+
+        # Guardar el DataFrame actualizado en el mismo archivo CSV
+        df.to_csv(f"data/wikipedia_content_updated.csv", index=False)
+        print(f"Contenido actualizado para la página con WikipageID {pageid} en el archivo {csv_file}.")
+    else:
+        print(f"No se encontró una fila con WikipageID {pageid} en el archivo {csv_file}.")
+
+def obtener_contenido_wikipedia_por_pageid(pageid, idioma='en'):
+    url = f"https://{idioma}.wikipedia.org/w/api.php"
+    parametros = {
+        'action': 'parse',
+        'pageid': pageid,  # Usar pageid en lugar de page
+        'prop': 'text',
+        'format': 'json'
+    }
+
+    try:
+        respuesta = requests.get(url, params=parametros)
+        respuesta.raise_for_status()
+        datos = respuesta.json()
+        contenido_bruto = datos['parse']['text']['*']
+        # Utiliza BeautifulSoup para analizar el contenido HTML
+        soup = BeautifulSoup(contenido_bruto, 'html.parser')
+
+        # Encuentra y elimina las notas de cita (contenido entre corchetes)
+        for nota_cita in soup.find_all("sup", class_="reference"):
+            nota_cita.extract()
+
+        # Elimina todas las imágenes con etiqueta <img>
+        for img in soup.find_all('img'):
+            img.extract()
+
+        # Elimina todas las tablas
+        for table in soup.find_all('table'):
+            table.extract()
+
+        # Elimina el contenido de las etiquetas span con clase mwe-math-element
+        for span in soup.find_all('span', class_='mwe-math-element'):
+            span.extract()
+
+        # Extrae párrafos y títulos
+        contenido_limpio = []
+        # Almacena el contenido actual
+        contenido_actual = {'titulo': '', 'contenido': ''}
+        for elemento in soup.find_all(['p', 'h2', 'h3', 'h4', 'ul', 'li']):
+            if elemento.name in ['h2', 'h3', 'h4']:
+                # Guarda el contenido anterior si existe
+                if contenido_actual['contenido']:
+                    contenido_limpio.append(contenido_actual)
+                # Establece el nuevo título
+                titulo_actual = elemento.get_text(
+                ).strip().replace("[edit]", "")
+                contenido_actual = {'titulo': titulo_actual, 'contenido': ''}
+            else:
+                # Si el contenido es un ul, extrae todos los li en el texto_parrafo
+                # Añade el párrafo al contenido actual si contiene texto
+                texto_parrafo = elemento.get_text().strip()
+                if elemento.name == 'ul':
+                    texto_parrafo = ''
+                    for li in elemento.find_all('li'):
+                        texto_parrafo += ' ' + li.get_text().strip()
+                    # Añade el párrafo al contenido actual si contiene texto
+                    if texto_parrafo:
+                        contenido_actual['contenido'] += ' ' + texto_parrafo
+                # Reemplaza [update] por una cadena vacía en el texto del párrafo
+                texto_parrafo = re.sub(r'\[update\]', '', texto_parrafo)
+                if texto_parrafo:
+                    contenido_actual['contenido'] += ' ' + texto_parrafo
+        # Añade el último contenido actual
+        if contenido_actual['contenido']:
+            contenido_limpio.append(contenido_actual)
+        return contenido_limpio
+    except requests.exceptions.RequestException as e:
+        print(f"Error al obtener el contenido de Wikipedia: {str(e)}")
+        return None
 
 def guardar_contenido_csv(articulo, contenido, fecha_modificacion, directorio):
     archivo_csv = directorio
