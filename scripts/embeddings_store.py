@@ -1,28 +1,37 @@
-import os
-import pandas as pd
-from langchain.text_splitter import RecursiveCharacterTextSplitter
+# Client
 import pinecone
+
+# Utilis
+import os
 from dotenv import load_dotenv
-from langchain.embeddings import HuggingFaceEmbeddings
-import matplotlib.pyplot as plt
-import numpy as np
+import string
+import pandas as pd
+
+# Vector store
 from langchain.vectorstores import Pinecone
-from langchain.embeddings.openai import OpenAIEmbeddings
+
+# Embeddings tested
+from langchain.embeddings import HuggingFaceEmbeddings
 
 # Text splitters tested
-from transformers import GPT2TokenizerFast
+from langchain.text_splitter import SentenceTransformersTokenTextSplitter
+from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain.text_splitter import CharacterTextSplitter
 from langchain.text_splitter import NLTKTextSplitter
-from langchain.text_splitter import SentenceTransformersTokenTextSplitter
-from langchain.text_splitter import SpacyTextSplitter
 from langchain.text_splitter import TokenTextSplitter
-from langchain.text_splitter import CharacterTextSplitter
+from langchain.text_splitter import SpacyTextSplitter
+from transformers import GPT2TokenizerFast
 
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.cluster import DBSCAN    
+# DBSCAN clustering and PCA
 from sklearn.feature_extraction.text import ENGLISH_STOP_WORDS
+from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics import silhouette_score
-import string
+from sklearn.decomposition import PCA
+from sklearn.cluster import DBSCAN    
+
+# Visualization
+import seaborn as sns
+import matplotlib.pyplot as plt
 
 def almacenar_embeddings_dbscan(index, directorio):
     load_dotenv()
@@ -84,7 +93,8 @@ def almacenar_embeddings_dbscan(index, directorio):
 
     for i, doc_chunk in enumerate(chunks_flat):
         print(f"Chunk {i} pertennece al cluster {clusters[i]}")
-        if clusters[i] == 1:  # Assuming cluster 1 corresponds to "related to Pollution"
+        # Si el chunk pertenece al cluster 1, agregarlo a la lista de documentos relacionados con Pollution
+        if clusters[i] == 1:
             pollution_documents.append(doc_chunk)
 
     total_chunks_char = 0
@@ -95,26 +105,37 @@ def almacenar_embeddings_dbscan(index, directorio):
     count_word = 0
 
     for a in pollution_documents:
-        # print(f'Chunk de {len(a)} caracteres')
+
         print(f"Chunk de {len(a.split(' '))} palabras")
         print('*' * 70, 'Contenido', '*' * 70)
         print(a)
         print('*' * 150)
         count_word += 1 if len(a.split(' ')) >= 0 else 0
         count += 1 if len(a) >= 1199 else 0
-        count_word_range += 1 if 100 <= len(a.split(' ')) <= 256 else 0
+        count_word_range += 1 if 60 <= len(a.split(' ')) <= 256 else 0
         total_chunks_char += len(a)
         total_chunks_word += len(a.split(' '))
         data_hist.append(len(a.split(' ')))
 
-    # print(f"Total de caracteres: {total_chunks_char}")
     print("Media de tokens por palabras: {:,.2f}".format(total_chunks_word/len(pollution_documents)))
-    # print("Media de tokens por caracteres: {:,.2f}".format(total_chunks_char/len(pollution_documents)))
-    # print(f"Se obtuvieron {len(pollution_documents)} chunks relacionados con la contaminación.")
-    # print(f"Se obtuvieron {count} chunks superiores o iguales a 1199.")
-    print(f"Se obtuvieron {count_word} documentos de tokens por palabras.")
-    print(f"Se obtuvieron {count_word_range} tokens entre 100 y 256.")
+    print(f"Se obtuvieron {count_word} documentos, tokens por palabras.")
+    print(f"Se obtuvieron {count_word_range} documentos entre 60 y 256.")
     print("-" * 150)
+    
+
+
+    # Reducción de dimensionalidad con PCA (opcional)
+    pca = PCA(n_components=2)
+    X_pca = pca.fit_transform(X.toarray())
+
+    # Graficar los clusters
+    plt.figure(figsize=(10, 6))
+    sns.scatterplot(x=X_pca[:, 0], y=X_pca[:, 1], hue=clusters, palette='viridis', legend='full')
+    plt.title('Clusters DBSCAN')
+    plt.xlabel('Componente Principal 1')
+    plt.ylabel('Componente Principal 2')
+    plt.show()
+
     
     print('----------- DBSCAN -----------')
     print(f"Documentos Originales: {len(chunks_flat)}")
@@ -157,7 +178,7 @@ def almacenar_embeddings_dbscan(index, directorio):
     )
 
     # Upload embeddings to PineCone with the name of the specified index
-    print("Subiendo embeddings a Pinecone...")
+    # print("Subiendo embeddings a Pinecone...")
     # 1200 - Alto procesamiento CPU ✅
     # Pinecone.from_texts(pollution_documents, embeddings, index_name=index, embeddings_chunk_size=1200) 
 

@@ -30,11 +30,11 @@ class WikipediaCrawler:
         #     print("No se pudieron obtener las páginas de la categoría.")
         
         # print("Verificar actualizaciones...")
-        # verificar_actualizaciones(self.directorio)
+        verificar_actualizaciones(self.directorio)
 
         if self.almacenar_embeddings:
             print("Almacenando embeddings...")
-            almacenar_embeddings_dbscan(self.index, self.directorio)
+            # almacenar_embeddings_dbscan(self.index, self.directorio)
 
 
 def main():
