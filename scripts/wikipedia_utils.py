@@ -88,16 +88,6 @@ def verificar_actualizaciones(csv_file):
     generar_informe_cambios(cambios)
 
 
-def comparar_contenido(contenido_anterior, contenido_actual):
-    cambios = []
-
-    for seccion_anterior, seccion_actual in zip(contenido_anterior, contenido_actual):
-        if seccion_anterior['content'] != seccion_actual['content']:
-            cambios.append(seccion_actual['content'])
-
-    return cambios
-
-
 def generar_informe_cambios(cambios):
     if not cambios:
         print("No se encontraron cambios.")
