@@ -41,22 +41,35 @@ def verificar_actualizaciones(csv_file):
     cambios = []
 
     def process_page(pageid, contenido_actual, group):
-        for index, row in group.iterrows():
-            for parrafo in contenido_actual:
-                similarity = SequenceMatcher(
-                    None, row['Contenido'], parrafo).ratio()
+        encontrado = False
+        for c in contenido_actual:
+            contenido = c['Contenido']
+            for index, row in group.iterrows():
+                similarity = SequenceMatcher(None, row['Contenido'], contenido).ratio()
 
                 if 0.7 < similarity < 1:
-                    indice = df[df['Contenido'] == row['Contenido']].index[0]
+                    print(f"""
+                    Similaridad: {similarity}\n
+                    Contenido original: {row['Contenido']}\n
+                    vs\n
+                    Contenido actualizado: {contenido}\n
+                          """)
                     guardar_contenido_actualizado(
-                        csv_file, pageid, parrafo, indice, fecha_modificacion_actual)
+                        csv_file, pageid, contenido, index, fecha_modificacion_actual)
                     cambios.append(
-                        (pageid, row['Contenido'], parrafo, row['Title']))
-                    print(f"Contenido con cambios: {parrafo} ({similarity})")
-                    print(
-                        f"Contenido anterior: {row['Contenido']} ({similarity})")
+                        (pageid, row['Contenido'], contenido, row['Title'], 'ACTUALIZACION'))
+                    encontrado = True
 
-    with ThreadPoolExecutor(max_workers=5) as executor:
+        if not encontrado:
+            # Si no se encuentra ninguna coincidencia, agrega una nueva fila al dataframe
+            for c in contenido_actual:
+                nueva_fila = {'WikipageID': pageid, 'Contenido': c['Contenido']}
+                df = df.append(nueva_fila, ignore_index=True)
+                cambios.append((pageid, None, c['Contenido'], c['Title'], 'INSERCION'))
+                print(f"Agregada nueva fila: {c['Contenido']}")
+
+            
+    with ThreadPoolExecutor(max_workers=16) as executor:
         futures = []
         df_grouped = df.groupby('WikipageID')
         for pageid, group in df_grouped:
@@ -69,7 +82,9 @@ def verificar_actualizaciones(csv_file):
                         f"Ultima modificacion: {last_modified} - Fecha actual de modificacion: {fecha_modificacion_actual}")
                     contenido_actual = obtener_contenido_wikipedia_por_pageid(
                         pageid)
-                    list_contenido_actual = [c['content']
+                    list_contenido_actual = [{'PageURL': c['page_url'], 'Title': c['title'], 'CreationDate': c['creation_date'],
+                                'Seccion':c['section'],'SubSeccion': c['sub_section'], 'Contenido': c['content'],
+                                'WikipageID': c['wikipage_id'], 'LastModified':c['last_modified']}
                                              for c in contenido_actual if str(c['content'])]
 
                     future = executor.submit(
@@ -92,12 +107,19 @@ def generar_informe_cambios(cambios):
     if not cambios:
         print("No se encontraron cambios.")
         return
+    informe = "*" * 100 + "\n\n"
+    informe += f"Fecha de generación del informe: {datetime.now().strftime('%Y-%m-%d-%H-%M-%S')}\n\n"
+    informe += "Informe de Cambios en el Contenido:\n\n"
+    informe += f"Total de inserciones detectadas: {len([c for c in cambios if c[4] == 'INSERCION'])}\n\n"
+    informe += f"Total de actualizaciones detectadas: {len([c for c in cambios if c[4] == 'ACTUALIZACION'])}\n\n"
+    informe += f"Total de operaciones: {len(cambios)}\n\n"
+    informe += "*" * 100 + "\n\n"
 
-    informe = "Informe de Cambios en el Contenido:\n\n"
-    informe += f"Total de cambios detectados: {len(cambios)}\n\n"
-
-    for pageid, original, actualizado, title in cambios:
-        informe += f"Cambios para {title} - {pageid} : \n\nParrafo original:\n{original} \n\nParrafo actualizado:\n{actualizado} \n\n"
+    for pageid, original, actualizado, title, accion in cambios:
+        if accion == 'INSERCION':
+            informe += f"Nuevo contenido para {title} - {pageid} ({accion}) : \n\n{actualizado} \n\n"
+        else:
+            informe += f"Cambios para {title} - {pageid} ({accion}) : \n\nParrafo original:\n{original} \n\nParrafo actualizado:\n{actualizado} \n\n"
 
     informe_file = "report/informe_cambios.txt"
     with open(informe_file, 'w', encoding="utf-8") as f:
@@ -113,7 +135,7 @@ def guardar_contenido_actualizado(csv_file, pageid, contenido_actualizado, index
         df.at[index, 'Contenido'] = contenido_actualizado
         df.at[index, 'LastModified'] = fecha_modificacion
 
-        df.to_csv('data/updated.csv', encoding='utf-8', index=False)
+        df.to_csv('data/updated2.csv', encoding='utf-8', index=False)
         print(
             f"Contenido actualizado para la página con WikipageID {pageid} en el archivo {csv_file}.")
     else:
